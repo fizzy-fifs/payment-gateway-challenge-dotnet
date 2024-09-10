@@ -25,7 +25,7 @@ public class PostPaymentRequestValidator : AbstractValidator<PostPaymentRequest>
 
     private bool BeAValidExpiryDate(PostPaymentRequest paymentRequest)
     {
-        if (paymentRequest.ExpiryMonth is < 1 or > 12)
+        if (paymentRequest.ExpiryMonth is < 01 or > 12)
         {
             return false;
         }
