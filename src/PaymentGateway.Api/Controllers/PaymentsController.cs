@@ -3,6 +3,7 @@
 using PaymentGateway.Api.Models.Requests;
 using PaymentGateway.Api.Models.Responses;
 using PaymentGateway.Api.Services;
+using PaymentGateway.Api.Validators;
 
 namespace PaymentGateway.Api.Controllers;
 
@@ -26,8 +27,17 @@ public class PaymentsController : Controller
     }
 
     [HttpPost]
-    public async Task<ActionResult<PostPaymentResponse>> ProcessPaymentsAsync([FromBody] PostPaymentRequest paymentRequest)
+    public async Task<ActionResult<PostPaymentResponse?>> ProcessPaymentsAsync([FromBody] PostPaymentRequest paymentRequest)
     {
+        PostPaymentRequestValidator validator = new();
+
+        var validatorResult = validator.Validate(paymentRequest);
+
+        if (validatorResult.IsValid)
+        {
+            return new BadRequestObjectResult(validatorResult);
+        }
+        
         var response = _paymentsService.ProcessPayments(paymentRequest);
     }
 }
