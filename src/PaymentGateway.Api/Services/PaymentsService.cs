@@ -10,10 +10,12 @@ namespace PaymentGateway.Api.Services;
 public class PaymentsService : IPaymentsService
 {
     private readonly IPaymentsRepository _paymentsRepository;
+    private readonly HttpClient _client;
 
-    public PaymentsService(IPaymentsRepository paymentsRepository)
+    public PaymentsService(IPaymentsRepository paymentsRepository, HttpClient client)
     {
         _paymentsRepository = paymentsRepository;
+        _client = client;
     }
 
     public PostPaymentResponse Get(Guid id)
@@ -23,30 +25,12 @@ public class PaymentsService : IPaymentsService
 
     public async Task<PostPaymentResponse> ProcessPayment(PostPaymentRequest paymentRequest)
     {
-        //Forward payment request to acquiring bank(bank_simulator.js)
-        HttpClient httpClient = new();
+        BankSimulatorResponse bankSimulatorResponse = await ForwardPaymentToAcquiringBank(paymentRequest);
 
-        var bankSimulatorRequest = new
+        if (!IsPaymentAuthorized(bankSimulatorResponse))
         {
-            card_number = paymentRequest.CardNumber.ToString(),
-            expiry_date = $"{paymentRequest.ExpiryMonth}/{paymentRequest.ExpiryYear}",
-            currency = paymentRequest.Currency,
-            amount = paymentRequest.Amount,
-            cvv = paymentRequest.Cvv
-        };
-
-        var response = await httpClient.PostAsJsonAsync("http://localhost:8080/payments", bankSimulatorRequest);
-        BankSimulatorResponse bankSimulatorResponse =
-            (await response.Content.ReadFromJsonAsync<BankSimulatorResponse>())!;
-
-
-        if (bankSimulatorResponse.StatusCode is 400 || bankSimulatorResponse.Authorized is false)
-        {
-            PostPaymentResponse paymentResponse = new() { Status = PaymentStatus.Declined };
-
-            return paymentResponse;
+            return new PostPaymentResponse { Status = PaymentStatus.Declined };
         }
-
 
         PostPaymentResponse authorizedPayment = new()
         {
@@ -59,6 +43,30 @@ public class PaymentsService : IPaymentsService
             Amount = paymentRequest.Amount
         };
         _paymentsRepository.Add(authorizedPayment);
+
         return authorizedPayment;
+    }
+
+    private async Task<BankSimulatorResponse> ForwardPaymentToAcquiringBank(PostPaymentRequest postPaymentRequest)
+    {
+        var bankSimulatorRequest = new
+        {
+            card_number = postPaymentRequest.CardNumber.ToString(),
+            expiry_date = $"{postPaymentRequest.ExpiryMonth}/{postPaymentRequest.ExpiryYear}",
+            currency = postPaymentRequest.Currency,
+            amount = postPaymentRequest.Amount,
+            cvv = postPaymentRequest.Cvv
+        };
+
+        var response = await _client.PostAsJsonAsync("http://localhost:8080/payments", bankSimulatorRequest);
+        BankSimulatorResponse bankSimulatorResponse =
+            (await response.Content.ReadFromJsonAsync<BankSimulatorResponse>())!;
+
+        return bankSimulatorResponse;
+    }
+
+    private bool IsPaymentAuthorized(BankSimulatorResponse bankSimulatorResponse1)
+    {
+        return bankSimulatorResponse1.StatusCode != 400 && bankSimulatorResponse1.Authorized is true;
     }
 }

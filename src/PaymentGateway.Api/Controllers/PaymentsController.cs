@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using FluentValidation.Results;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -33,9 +34,7 @@ public class PaymentsController : Controller
     public async Task<ActionResult<PostPaymentResponse>> ProcessPaymentAsync(
         [FromBody] PostPaymentRequest paymentRequest)
     {
-        PostPaymentRequestValidator validator = new();
-
-        var validatorResult = await validator.ValidateAsync(paymentRequest);
+        ValidationResult validatorResult = await ValidatePaymentRequestAsync(paymentRequest);
 
         if (validatorResult.IsValid)
         {
@@ -47,5 +46,11 @@ public class PaymentsController : Controller
         return paymentResponse.Status != PaymentStatus.Authorized
             ? StatusCode(StatusCodes.Status402PaymentRequired, paymentResponse)
             : new OkObjectResult(paymentResponse);
+    }
+    
+    private async Task<ValidationResult> ValidatePaymentRequestAsync(PostPaymentRequest postPaymentRequest)
+    {
+        PostPaymentRequestValidator validator = new();
+        return await validator.ValidateAsync(postPaymentRequest);
     }
 }
