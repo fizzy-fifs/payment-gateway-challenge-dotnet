@@ -1,5 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using FluentValidation;
 
+using Microsoft.AspNetCore.Mvc;
+
+using PaymentGateway.Api.Enums;
 using PaymentGateway.Api.Models.Requests;
 using PaymentGateway.Api.Models.Responses;
 using PaymentGateway.Api.Services;
@@ -27,17 +30,22 @@ public class PaymentsController : Controller
     }
 
     [HttpPost]
-    public async Task<ActionResult<PostPaymentResponse?>> ProcessPaymentsAsync([FromBody] PostPaymentRequest paymentRequest)
+    public async Task<ActionResult<PostPaymentResponse>> ProcessPaymentAsync(
+        [FromBody] PostPaymentRequest paymentRequest)
     {
         PostPaymentRequestValidator validator = new();
 
-        var validatorResult = validator.Validate(paymentRequest);
+        var validatorResult = await validator.ValidateAsync(paymentRequest);
 
         if (validatorResult.IsValid)
         {
-            return new BadRequestObjectResult(validatorResult);
+            return new BadRequestObjectResult(new { PaymentStatus.Rejected, validatorResult });
         }
+
+        var paymentResponse = await _paymentsService.ProcessPayment(paymentRequest);
         
-        var response = _paymentsService.ProcessPayments(paymentRequest);
+        return paymentResponse.Status != PaymentStatus.Authorized
+            ? StatusCode(StatusCodes.Status402PaymentRequired, paymentResponse)
+            : new OkObjectResult(paymentResponse);
     }
 }
