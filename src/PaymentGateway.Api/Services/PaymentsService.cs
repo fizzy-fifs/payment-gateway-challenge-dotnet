@@ -55,7 +55,7 @@ public class PaymentsService : IPaymentsService
 
     public async Task<PostPaymentResponse> ProcessPayment(PostPaymentRequest paymentRequest)
     {
-        var bankSimulatorResponse = await ForwardPaymentToAcquiringBank(paymentRequest);
+        var bankSimulatorResponse = await ForwardPaymentToAcquiringBankAsync(paymentRequest);
 
         if (bankSimulatorResponse is null || !IsPaymentAuthorized(bankSimulatorResponse))
         {
@@ -77,7 +77,7 @@ public class PaymentsService : IPaymentsService
         return authorizedPayment;
     }
 
-    private async Task<BankSimulatorResponse?> ForwardPaymentToAcquiringBank(PostPaymentRequest postPaymentRequest)
+    private async Task<BankSimulatorResponse?> ForwardPaymentToAcquiringBankAsync(PostPaymentRequest postPaymentRequest)
     {
         var bankSimulatorRequest = new
         {

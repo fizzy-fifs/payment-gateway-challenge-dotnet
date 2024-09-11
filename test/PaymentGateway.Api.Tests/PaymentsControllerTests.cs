@@ -2,34 +2,21 @@
 using System.Net.Http.Json;
 
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-
-using Moq;
 
 using PaymentGateway.Api.Controllers;
-using PaymentGateway.Api.Enums;
 using PaymentGateway.Api.Models.Requests;
 using PaymentGateway.Api.Models.Responses;
-using PaymentGateway.Api.Repositories;
 
 namespace PaymentGateway.Api.Tests;
 
-public class PaymentsControllerTests
+public class PaymentsControllerTests : IClassFixture<PaymentsControllerTestFixture>
 {
     private readonly Random _random = new();
-    private readonly WebApplicationFactory<PaymentsController> _webApplicationFactory;
-    private readonly HttpClient _client;
-    private readonly IPaymentsRepository _paymentsRepository;
+    private readonly PaymentsControllerTestFixture _fixture;
 
-    public PaymentsControllerTests()
+    public PaymentsControllerTests(PaymentsControllerTestFixture fixture)
     {
-        var mockLogger = new Mock<ILogger<IPaymentsRepository>>();
-        _paymentsRepository = new PaymentsRepository(mockLogger.Object);
-        _webApplicationFactory = new WebApplicationFactory<PaymentsController>()
-            .WithWebHostBuilder(builder =>
-                builder.ConfigureServices(services => ((ServiceCollection)services).AddSingleton(_paymentsRepository)));
-        _client = _webApplicationFactory.CreateClient();
+        _fixture = fixture;
     }
 
     [Fact]
@@ -46,16 +33,10 @@ public class PaymentsControllerTests
             Currency = "GBP"
         };
 
-        _paymentsRepository.Add(payment);
-
-        var webApplicationFactory = new WebApplicationFactory<PaymentsController>();
-        var client = webApplicationFactory.WithWebHostBuilder(builder =>
-                builder.ConfigureServices(services => ((ServiceCollection)services)
-                    .AddSingleton(_paymentsRepository)))
-            .CreateClient();
+        _fixture.PaymentsRepository.Add(payment);
 
         // Act
-        var response = await client.GetAsync($"/api/Payments/{payment.Id}");
+        var response = await _fixture.Client.GetAsync($"/api/Payments/{payment.Id}");
         var paymentResponse = await response.Content.ReadFromJsonAsync<PostPaymentResponse>();
 
         // Assert
@@ -75,5 +56,35 @@ public class PaymentsControllerTests
 
         // Assert
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProcessesAValidPaymentSuccessfully()
+    {
+        // Arrange
+        _fixture.SetupBankSimulatorMockResponse(HttpStatusCode.OK, true, Guid.NewGuid());
+        
+        PostPaymentRequest paymentRequest = new()
+        {
+            ExpiryYear = 2026,
+            ExpiryMonth = 10,
+            Amount = 1000,
+            CardNumber = 2098345812973645,
+            Currency = "GBP",
+            Cvv = 123
+        };
+
+        // Act
+        var response = await _fixture.Client.PostAsJsonAsync($"/api/Payments/process", paymentRequest);
+        var paymentResponse = await response.Content.ReadFromJsonAsync<PostPaymentResponse>();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(paymentResponse);
+        Assert.Equal(paymentResponse!.ExpiryYear, paymentRequest.ExpiryYear);
+        Assert.Equal(paymentResponse!.ExpiryMonth, paymentRequest.ExpiryMonth);
+        Assert.Equal(paymentResponse!.Amount, paymentRequest.Amount);
+        Assert.Equal(paymentResponse!.CardNumberLastFour, Int32.Parse(paymentRequest.CardNumber.ToString()[^4..]));
+        Assert.Equal(paymentResponse!.Currency, paymentRequest.Currency);
     }
 }
