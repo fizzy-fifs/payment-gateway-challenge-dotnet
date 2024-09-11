@@ -44,7 +44,7 @@ public class PaymentsControllerTestFixture
             .CreateClient();
     }
     
-    public void SetupBankSimulatorMockResponse(HttpStatusCode statusCode, bool authorized, Guid authorizationCode)
+    public void SetupBankSimulatorMockResponse(HttpStatusCode statusCode, bool authorized, Guid? authorizationCode = null)
     {
         MockHttpMessageHandler.Protected()
             .Setup<Task<HttpResponseMessage>>(

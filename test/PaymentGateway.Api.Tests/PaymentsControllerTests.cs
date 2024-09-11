@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 using PaymentGateway.Api.Controllers;
+using PaymentGateway.Api.Enums;
 using PaymentGateway.Api.Models.Requests;
 using PaymentGateway.Api.Models.Responses;
 
@@ -86,5 +87,32 @@ public class PaymentsControllerTests : IClassFixture<PaymentsControllerTestFixtu
         Assert.Equal(paymentResponse!.Amount, paymentRequest.Amount);
         Assert.Equal(paymentResponse!.CardNumberLastFour, Int32.Parse(paymentRequest.CardNumber.ToString()[^4..]));
         Assert.Equal(paymentResponse!.Currency, paymentRequest.Currency);
+        Assert.Equal(PaymentStatus.Authorized,paymentResponse!.Status);
+    }
+
+    [Fact]
+    public async Task HandlesDeclinedPayments()
+    {
+        // Arrange
+        _fixture.SetupBankSimulatorMockResponse(HttpStatusCode.OK, false);
+        
+        PostPaymentRequest paymentRequest = new()
+        {
+            ExpiryYear = 2026,
+            ExpiryMonth = 10,
+            Amount = 1000,
+            CardNumber = 2098345812973645,
+            Currency = "GBP",
+            Cvv = 123
+        };
+        
+        // Act
+        var response = await _fixture.Client.PostAsJsonAsync("/api/Payments/process", paymentRequest);
+        var paymentResponse = await response.Content.ReadFromJsonAsync<PostPaymentResponse>();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.PaymentRequired, response.StatusCode);
+        Assert.NotNull(paymentResponse);
+        Assert.Equal(PaymentStatus.Declined, paymentResponse!.Status);
     }
 }
